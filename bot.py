@@ -7,8 +7,9 @@ from datetime import datetime, timedelta
 from dateutil.relativedelta import relativedelta
 
 from aiogram import Bot, Dispatcher, F
-from aiogram.types import Message, ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
+from aiogram.types import Message, ReplyKeyboardMarkup, KeyboardButton, ReplyKeyboardRemove, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
 from aiogram.filters import CommandStart, StateFilter
+from aiogram.fsm.state import default_state
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.storage.memory import MemoryStorage
@@ -104,6 +105,8 @@ def calc_service(call_date_str: str) -> dict:
     remaining_months = max(0, rem_delta.years * 12 + rem_delta.months)
 
     total_days = (demob - call).days
+    total_weeks = total_days // 7
+    total_months = SERVICE_MONTHS
     percentage = max(0.0, min(100.0, passed_days / total_days * 100))
 
     return {
@@ -113,6 +116,9 @@ def calc_service(call_date_str: str) -> dict:
         'remaining_months': remaining_months,
         'remaining_weeks': remaining_weeks,
         'remaining_days': remaining_days,
+        'total_days': total_days,
+        'total_weeks': total_weeks,
+        'total_months': total_months,
         'percentage': percentage,
         'demob': demob,
     }
@@ -292,7 +298,10 @@ async def cmd_start(message: Message, state: FSMContext):
 async def reg_name(message: Message, state: FSMContext):
     await state.update_data(name=message.text)
     await state.set_state(Registration.call_date)
-    await message.answer("💘Введи дату призыва в формате ДД.ММ.ГГГГ\n(например: 15.11.2024):")
+    await message.answer(
+        "Введи дату призыва в формате ДД.ММ.ГГГГ\n(например: 15.11.2024):",
+        reply_markup=ReplyKeyboardRemove(),
+    )
 
 
 @dp.message(StateFilter(Registration.call_date))
@@ -344,7 +353,7 @@ def make_bar(pct: float, size: int = 10) -> str:
     return f"✅ {passed_bar}\n⏳ {remaining_bar}"
 
 
-@dp.message(F.text == "⏱ Таймер")
+@dp.message(default_state, F.text == "⏱ Таймер")
 async def timer_handler(message: Message):
     user = await get_user(message.from_user.id)
     if not user:
@@ -372,12 +381,11 @@ async def cb_timer_months(callback: CallbackQuery):
     if not user:
         return
     i = calc_service(user['call_date'])
-    total_months = SERVICE_MONTHS
     pct = i['percentage']
     await callback.message.answer(
         f"📅 <b>Месяца</b>\n\n"
         f"{make_bar(pct)}\n"
-        f"✅ Прошло:   <b>{i['passed_months']} из {total_months} мес.</b>\n"
+        f"✅ Прошло:   <b>{i['passed_months']} из {i['total_months']} мес.</b>\n"
         f"⏳ Осталось: <b>{i['remaining_months']} мес.</b>",
         parse_mode='HTML',
     )
@@ -390,13 +398,12 @@ async def cb_timer_weeks(callback: CallbackQuery):
     if not user:
         return
     i = calc_service(user['call_date'])
-    total_weeks = SERVICE_MONTHS * 4
     pct = i['percentage']
     await callback.message.answer(
         f"📆 <b>Недели</b>\n\n"
         f"{make_bar(pct)}\n"
-        f"✅ Прошло:   <b>{i['passed_weeks']} нед.</b>\n"
-        f"⏳ Осталось: <b>{i['remaining_weeks']} из ~{total_weeks} нед.</b>",
+        f"✅ Прошло:   <b>{i['passed_weeks']} из {i['total_weeks']} нед.</b>\n"
+        f"⏳ Осталось: <b>{i['remaining_weeks']} нед.</b>",
         parse_mode='HTML',
     )
 
@@ -408,18 +415,17 @@ async def cb_timer_days(callback: CallbackQuery):
     if not user:
         return
     i = calc_service(user['call_date'])
-    total_days = SERVICE_MONTHS * 30
     pct = i['percentage']
     await callback.message.answer(
         f"🗓 <b>Дни</b>\n\n"
         f"{make_bar(pct)}\n"
-        f"✅ Прошло:   <b>{i['passed_days']} дн.</b>\n"
-        f"⏳ Осталось: <b>{i['remaining_days']} из ~{total_days} дн.</b>",
+        f"✅ Прошло:   <b>{i['passed_days']} из {i['total_days']} дн.</b>\n"
+        f"⏳ Осталось: <b>{i['remaining_days']} дн.</b>",
         parse_mode='HTML',
     )
 
 
-@dp.message(F.text == "📊 % службы")
+@dp.message(default_state, F.text == "📊 % службы")
 async def percent_handler(message: Message):
     user = await get_user(message.from_user.id)
     if not user:
@@ -451,7 +457,7 @@ async def percent_handler(message: Message):
     )
 
 
-@dp.message(F.text == "⭐ Русская рулетка")
+@dp.message(default_state, F.text == "⭐ Русская рулетка")
 async def roulette_handler(message: Message):
     order = random.choice(ORDERS)
     await message.answer(
@@ -468,7 +474,7 @@ def edit_kb():
     ])
 
 
-@dp.message(F.text == "💟 Профиль")
+@dp.message(default_state, F.text == "💟 Профиль")
 async def profile_handler(message: Message):
     user = await get_user(message.from_user.id)
     if not user:
@@ -492,7 +498,10 @@ async def profile_handler(message: Message):
 async def edit_profile_callback(callback: CallbackQuery, state: FSMContext):
     await callback.answer()
     await state.set_state(Registration.name)
-    await callback.message.answer("Давай обновим профиль.\n\nКак тебя зовут?")
+    await callback.message.answer(
+        "Давай обновим профиль.\n\nКак тебя зовут?",
+        reply_markup=ReplyKeyboardRemove(),
+    )
 
 
 # ─── Entry point ─────────────────────────────────────────────────────────────
