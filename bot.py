@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import os
 import random
 import aiosqlite
 from datetime import datetime, timedelta
@@ -16,7 +17,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 logging.basicConfig(level=logging.INFO)
 
-TOKEN = '8359750583:AAGPVmC7XdslBhBKO28DblZQb1lHoQTN0tA'
+TOKEN = os.environ.get('TOKEN', '8359750583:AAGPVmC7XdslBhBKO28DblZQb1lHoQTN0tA')
 DB_PATH = 'army_bot.db'
 SERVICE_MONTHS = 12
 
